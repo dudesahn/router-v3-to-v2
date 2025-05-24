@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGLP-3.0
 pragma solidity ^0.8.19;
 
-import {IYearnVaultV2} from "./interfaces/IYearnVaultV2.sol";
+import {IYearnVaultV2} from "src/interfaces/IYearnVaultV2.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title Share Value Helper
@@ -17,13 +18,21 @@ library ShareValueHelper {
      */
     function amountToShares(
         address _vault,
-        uint256 _amount
+        uint256 _amount,
+        bool _useCeiling
     ) internal view returns (uint256) {
         uint256 totalSupply = IYearnVaultV2(_vault).totalSupply();
         if (totalSupply > 0) {
-            return (_amount * totalSupply) / calculateFreeFunds(_vault);
+            if (_useCeiling) {
+                return
+                    Math.ceilDiv(
+                        _amount * totalSupply,
+                        calculateFreeFunds(_vault)
+                    );
+            } else {
+                return (_amount * totalSupply) / calculateFreeFunds(_vault);
+            }
         }
-        return _amount;
     }
 
     /**
@@ -34,13 +43,19 @@ library ShareValueHelper {
      */
     function sharesToAmount(
         address _vault,
-        uint256 _shares
+        uint256 _shares,
+        bool _useCeiling
     ) internal view returns (uint256) {
         uint256 totalSupply = IYearnVaultV2(_vault).totalSupply();
         if (totalSupply == 0) return _shares;
 
         uint256 freeFunds = calculateFreeFunds(_vault);
-        return ((_shares * freeFunds) / totalSupply);
+
+        if (_useCeiling) {
+            return Math.ceilDiv(_shares * freeFunds, totalSupply);
+        } else {
+            return ((_shares * freeFunds) / totalSupply);
+        }
     }
 
     function calculateFreeFunds(

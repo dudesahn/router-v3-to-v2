@@ -3,29 +3,30 @@ pragma solidity ^0.8.18;
 
 import {BaseStrategy, ERC20} from "@tokenized-strategy/BaseStrategy.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ShareValueHelper} from "./ShareValueHelper.sol";
-import {IYearnVaultV2} from "./interfaces/IYearnVaultV2.sol";
+import {ShareValueHelper, IYearnVaultV2} from "src/ShareValueHelper.sol";
 
 // FOR THIS STRATEGY: PULL IN LEARNING'S FROM V2 => V2 ROUTER, SCHLAG'S ROUTER, AND MY CRVUSD ROUTER (FOR SURE TESTING)
+// also build new V2 => V3 and V2 => V2 routers while I'm doing this probably
+// should replace ShareValueHelper lib with a version that can do ceiling rounding like on base: https://basescan.org/address/0x4d2ed72285206d2b4b59cda21ed0a979ad1f497f#code
 
 contract RouterV2 is BaseStrategy {
     using SafeERC20 for ERC20;
-    
+
     /// @notice The V2 yVault we are routing this strategy to.
-    IYearnVaultV2 public immutable yVault;
-    
+    IYearnVaultV2 public immutable v2Vault;
+
     // no reason to deposit less than this, and helps us avoid any weird reverts from depositing 1 wei
     uint256 internal constant DUST = 1e6;
 
     constructor(
         address _asset,
         string memory _name,
-        address _yVault
+        address _v2Vault
     ) BaseStrategy(_asset, _name) {
-        yVault = IYearnVaultV2(_yVault);
-        require(yVault.token() == _asset, "wrong asset");
+        v2Vault = IYearnVaultV2(_v2Vault);
+        require(v2Vault.token() == _asset, "wrong asset");
 
-        asset.forceApprove(_yVault, type(uint256).max);
+        asset.forceApprove(_v2Vault, type(uint256).max);
     }
 
     /**
@@ -41,12 +42,12 @@ contract RouterV2 is BaseStrategy {
      */
     function _deployFunds(uint256 _amount) internal override {
         uint256 toDeposit = asset.balanceOf(address(this));
-        
+
         if (toDeposit > DUST) {
-            yVault.deposit(toDeposit);
+            v2Vault.deposit(toDeposit);
         }
     }
-    
+
     // EVERYTHING BELOW HERE IS PURE SCHLAB CODE (except for adding in Lib)
 
     /**
@@ -71,12 +72,17 @@ contract RouterV2 is BaseStrategy {
      * @param _amount, The amount of 'asset' to be freed.
      */
     function _freeFunds(uint256 _amount) internal override {
-        uint256 shares = amountToShares(address(yVault), _amount);
-        uint256 balance = yVault.balanceOf(address(this));
+        // use share value helper for improved precision and round up
+        uint256 shares = ShareValueHelper.amountToShares(
+            address(v2Vault),
+            _amount,
+            true
+        );
+        uint256 balance = v2Vault.balanceOf(address(this));
 
         if (shares > balance) shares = balance;
 
-        yVault.withdraw(shares);
+        v2Vault.withdraw(shares);
     }
 
     /**
@@ -108,17 +114,18 @@ contract RouterV2 is BaseStrategy {
     {
         _totalAssets =
             asset.balanceOf(address(this)) +
-            ShareValueHelper.sharesToAmount(address(yVault), yVault.balanceOf(address(this)));
+            ShareValueHelper.sharesToAmount(
+                address(v2Vault),
+                v2Vault.balanceOf(address(this)),
+                false
+            );
     }
-    
-    function availableDepositLimit(address)
-        public
-        view
-        override
-        returns (uint256)
-    {
-        uint256 limit = yVault.depositLimit();
-        uint256 assets = yVault.totalAssets();
+
+    function availableDepositLimit(
+        address
+    ) public view override returns (uint256) {
+        uint256 limit = v2Vault.depositLimit();
+        uint256 assets = v2Vault.totalAssets();
 
         if (limit > assets) {
             unchecked {
@@ -126,8 +133,7 @@ contract RouterV2 is BaseStrategy {
             }
         }
     }
-    
-    
+
     function _emergencyWithdraw(uint256 _amount) internal override {
         _freeFunds(_amount);
     }

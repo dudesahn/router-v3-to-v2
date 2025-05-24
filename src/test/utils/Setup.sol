@@ -4,9 +4,9 @@ pragma solidity ^0.8.18;
 import "forge-std/console2.sol";
 import {ExtendedTest} from "./ExtendedTest.sol";
 
-import {Strategy, ERC20} from "../../Strategy.sol";
-import {StrategyFactory} from "../../StrategyFactory.sol";
-import {IStrategyInterface} from "../../interfaces/IStrategyInterface.sol";
+import {RouterV2, ERC20} from "src/RouterV2.sol";
+import {StrategyFactory} from "src/StrategyFactory.sol";
+import {IStrategyInterface} from "src/interfaces/IStrategyInterface.sol";
 
 // Inherit the events so they can be checked if desired.
 import {IEvents} from "@tokenized-strategy/interfaces/IEvents.sol";
@@ -25,6 +25,8 @@ contract Setup is ExtendedTest, IEvents {
     IStrategyInterface public strategy;
 
     StrategyFactory public strategyFactory;
+
+    address public V2Vault;
 
     mapping(string => address) public tokenAddrs;
 
@@ -85,7 +87,8 @@ contract Setup is ExtendedTest, IEvents {
             address(
                 strategyFactory.newStrategy(
                     address(asset),
-                    "Tokenized Strategy"
+                    "Tokenized Strategy",
+                    V2Vault
                 )
             )
         );
