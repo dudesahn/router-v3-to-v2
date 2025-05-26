@@ -4,7 +4,7 @@ pragma solidity ^0.8.18;
 import "forge-std/console2.sol";
 import {ExtendedTest} from "./ExtendedTest.sol";
 
-import {RouterV2, ERC20} from "src/RouterV2.sol";
+import {RouterV2, ERC20, IYearnVaultV2} from "src/RouterV2.sol";
 import {StrategyFactory} from "src/StrategyFactory.sol";
 import {IStrategyInterface} from "src/interfaces/IStrategyInterface.sol";
 
@@ -26,8 +26,6 @@ contract Setup is ExtendedTest, IEvents {
 
     StrategyFactory public strategyFactory;
 
-    address public V2Vault;
-
     mapping(string => address) public tokenAddrs;
 
     // Addresses for different roles we will use repeatedly.
@@ -37,6 +35,9 @@ contract Setup is ExtendedTest, IEvents {
     address public performanceFeeRecipient = address(3);
     address public emergencyAdmin = address(5);
 
+    // addresses for deployment
+    address public V2Vault;
+
     // Address of the real deployed Factory
     address public factory;
 
@@ -44,21 +45,24 @@ contract Setup is ExtendedTest, IEvents {
     uint256 public decimals;
     uint256 public MAX_BPS = 10_000;
 
-    // Fuzz from $0.01 of 1e6 stable coins up to 1 trillion of a 1e18 coin
+    // Fuzz from $1 of 1e6 stable coins up to 1 trillion of a 1e18 coin
     uint256 public maxFuzzAmount = 1e30;
-    uint256 public minFuzzAmount = 10_000;
+    uint256 public minFuzzAmount = 1e6; // use this because it's our min "dust" amount in our strategy
 
-    // Default profit max unlock time is set for 10 days
-    uint256 public profitMaxUnlockTime = 10 days;
+    // Default profit max unlock time is set for 1 days
+    uint256 public profitMaxUnlockTime = 1 days;
 
     function setUp() public virtual {
         _setTokenAddrs();
 
         // Set asset
-        asset = ERC20(tokenAddrs["DAI"]);
+        asset = ERC20(tokenAddrs["scrvUSD-reUSD"]);
 
         // Set decimals
         decimals = asset.decimals();
+
+        // set our V2 vault address here
+        V2Vault = 0xf165a634296800812B8B0607a75DeDdcD4D3cC88;
 
         strategyFactory = new StrategyFactory(
             management,
@@ -87,7 +91,7 @@ contract Setup is ExtendedTest, IEvents {
             address(
                 strategyFactory.newStrategy(
                     address(asset),
-                    "Tokenized Strategy",
+                    "V2 Router Strategy",
                     V2Vault
                 )
             )
@@ -144,6 +148,47 @@ contract Setup is ExtendedTest, IEvents {
         deal(address(_asset), _to, balanceBefore + _amount);
     }
 
+    function createProfitInTargetVault(
+        address _targetVault,
+        uint256 _amount
+    ) public {
+        // setup our tokens
+        IYearnVaultV2 targetVault = IYearnVaultV2(_targetVault);
+        ERC20 underlyingToken = ERC20(targetVault.token());
+
+        // here we assume using 100% curve, index 1 in the withdrawal queue
+        IYearnVaultV2 targetStrategy = IYearnVaultV2(
+            targetVault.withdrawalQueue(1)
+        );
+
+        // harvest the strategy to deploy any funds sitting in the vault
+        address strategist = targetStrategy.strategist();
+        vm.prank(strategist);
+        targetStrategy.harvest();
+
+        // do a smol sleep since we can't harvest in the same block (?)
+        skip(1 seconds);
+
+        // check the balance prior to dealing
+        uint256 balanceBefore = underlyingToken.balanceOf(
+            address(targetStrategy)
+        );
+
+        // send the LP token to the strategy
+        deal(
+            address(underlyingToken),
+            address(targetStrategy),
+            balanceBefore + _amount
+        );
+
+        // harvest the strategy again to realize donated profits
+        vm.prank(strategist);
+        targetStrategy.harvest();
+
+        // skip 24 hours to release profits
+        skip(1 days);
+    }
+
     function setFees(uint16 _protocolFee, uint16 _performanceFee) public {
         address gov = IFactory(factory).governance();
 
@@ -159,6 +204,9 @@ contract Setup is ExtendedTest, IEvents {
     }
 
     function _setTokenAddrs() internal {
+        tokenAddrs[
+            "scrvUSD-reUSD"
+        ] = 0xc522A6606BBA746d7960404F22a3DB936B6F4F50;
         tokenAddrs["WBTC"] = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
         tokenAddrs["YFI"] = 0x0bc529c00C6401aEF6D220BE8C6Ea1667F6Ad93e;
         tokenAddrs["WETH"] = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
