@@ -7,7 +7,6 @@ import {ShareValueHelper, IYearnVaultV2} from "src/ShareValueHelper.sol";
 
 // FOR THIS STRATEGY: PULL IN LEARNING'S FROM V2 => V2 ROUTER, SCHLAG'S ROUTER, AND MY CRVUSD ROUTER (FOR SURE TESTING)
 // also build new V2 => V3 and V2 => V2 routers while I'm doing this probably
-// should replace ShareValueHelper lib with a version that can do ceiling rounding like on base: https://basescan.org/address/0x4d2ed72285206d2b4b59cda21ed0a979ad1f497f#code
 
 contract RouterV2 is BaseStrategy {
     using SafeERC20 for ERC20;
@@ -17,6 +16,9 @@ contract RouterV2 is BaseStrategy {
 
     // no reason to deposit less than this, and helps us avoid any weird reverts from depositing 1 wei
     uint256 internal constant DUST = 1e6;
+
+    /// @notice Max percentage loss we will take on withdrawals, in basis points. Default setting is zero.
+    uint256 public maxLoss;
 
     constructor(
         address _asset,
@@ -29,18 +31,38 @@ contract RouterV2 is BaseStrategy {
         asset.forceApprove(_v2Vault, type(uint256).max);
     }
 
+    /* ========== VIEWS ========== */
+
     /**
-     * @dev Can deploy up to '_amount' of 'asset' in the yield source.
-     *
-     * This function is called at the end of a {deposit} or {mint}
-     * call. Meaning that unless a whitelist is implemented it will
-     * be entirely permissionless and thus can be sandwiched or otherwise
-     * manipulated.
-     *
-     * @param _amount The amount of 'asset' that the strategy can attempt
-     * to deposit in the yield source.
+     * @notice Return the current loose balance of this strategies `asset`.
      */
-    function _deployFunds(uint256 _amount) internal override {
+    function balanceOfAsset() public view returns (uint256) {
+        return asset.balanceOf(address(this));
+    }
+
+    /**
+     * @notice Return the current balance of the strategies vault shares.
+     */
+    function balanceOfVault() public view returns (uint256) {
+        return v2Vault.balanceOf(address(this));
+    }
+
+    /**
+     * @notice The full value denominated in `asset` of the strategies vault
+     *   tokens held in the contract.
+     */
+    function valueOfVault() public view returns (uint256) {
+        return
+            ShareValueHelper.sharesToAmount(
+                address(v2Vault),
+                balanceOfVault(),
+                false
+            );
+    }
+
+    /* ========== CORE STRATEGY FUNCTIONS ========== */
+
+    function _deployFunds(uint256 /*_amount*/) internal override {
         uint256 toDeposit = asset.balanceOf(address(this));
 
         if (toDeposit > DUST) {
@@ -48,93 +70,59 @@ contract RouterV2 is BaseStrategy {
         }
     }
 
-    // EVERYTHING BELOW HERE IS PURE SCHLAB CODE (except for adding in Lib)
-
-    /**
-     * @dev Should attempt to free the '_amount' of 'asset'.
-     *
-     * NOTE: The amount of 'asset' that is already loose has already
-     * been accounted for.
-     *
-     * This function is called during {withdraw} and {redeem} calls.
-     * Meaning that unless a whitelist is implemented it will be
-     * entirely permissionless and thus can be sandwiched or otherwise
-     * manipulated.
-     *
-     * Should not rely on asset.balanceOf(address(this)) calls other than
-     * for diff accounting purposes.
-     *
-     * Any difference between `_amount` and what is actually freed will be
-     * counted as a loss and passed on to the withdrawer. This means
-     * care should be taken in times of illiquidity. It may be better to revert
-     * if withdraws are simply illiquid so not to realize incorrect losses.
-     *
-     * @param _amount, The amount of 'asset' to be freed.
-     */
     function _freeFunds(uint256 _amount) internal override {
-        // use share value helper for improved precision and round up
-        uint256 shares = ShareValueHelper.amountToShares(
-            address(v2Vault),
-            _amount,
-            true
-        );
-        uint256 balance = v2Vault.balanceOf(address(this));
+        // check how many shares we need against what we have
+        uint256 balance = balanceOfVault();
+        uint256 shares;
 
-        if (shares > balance) shares = balance;
+        if (_amount == type(uint256).max) {
+            shares = balance;
+        } else {
+            // use share value helper for improved precision and round up
+            shares = ShareValueHelper.amountToShares(
+                address(v2Vault),
+                _amount,
+                true
+            );
 
-        v2Vault.withdraw(shares);
+            if (shares > balance) shares = balance;
+        }
+
+        // trying to withdraw 0 reverts
+        if (shares > 0) {
+            v2Vault.withdraw(shares, address(this), maxLoss);
+        }
     }
 
-    /**
-     * @dev Internal function to harvest all rewards, redeploy any idle
-     * funds and return an accurate accounting of all funds currently
-     * held by the Strategy.
-     *
-     * This should do any needed harvesting, rewards selling, accrual,
-     * redepositing etc. to get the most accurate view of current assets.
-     *
-     * NOTE: All applicable assets including loose assets should be
-     * accounted for in this function.
-     *
-     * Care should be taken when relying on oracles or swap values rather
-     * than actual amounts as all Strategy profit/loss accounting will
-     * be done based on this returned value.
-     *
-     * This can still be called post a shutdown, a strategist can check
-     * `TokenizedStrategy.isShutdown()` to decide if funds should be
-     * redeployed or simply realize any profits/losses.
-     *
-     * @return _totalAssets A trusted and accurate account for the total
-     * amount of 'asset' the strategy currently holds including idle funds.
-     */
     function _harvestAndReport()
         internal
         override
         returns (uint256 _totalAssets)
     {
-        _totalAssets =
-            asset.balanceOf(address(this)) +
-            ShareValueHelper.sharesToAmount(
-                address(v2Vault),
-                v2Vault.balanceOf(address(this)),
-                false
-            );
+        _totalAssets = balanceOfAsset() + valueOfVault();
     }
 
     function availableDepositLimit(
         address
-    ) public view override returns (uint256) {
+    ) public view override returns (uint256 depositLimit) {
         uint256 limit = v2Vault.depositLimit();
         uint256 assets = v2Vault.totalAssets();
 
         if (limit > assets) {
             unchecked {
-                return limit - assets;
+                depositLimit = limit - assets;
             }
         }
     }
 
     function _emergencyWithdraw(uint256 _amount) internal override {
         _freeFunds(_amount);
+    }
+
+    /// @notice Set the maximum loss we will accept (due to slippage or locked funds) on a vault withdrawal.
+    /// @dev Generally, this should be zero, and this function will only be used in special/emergency cases.
+    /// @param _maxLoss Max percentage loss we will take, in basis points (100% = 10_000).
+    function setMaxLoss(uint256 _maxLoss) external onlyManager {
+        maxLoss = _maxLoss;
     }
 }

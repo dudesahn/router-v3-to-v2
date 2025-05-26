@@ -14,23 +14,22 @@ library ShareValueHelper {
      * @notice Helper function to convert underlying amount to vault shares with exact precision.
      * @param _vault The address of the vault token.
      * @param _amount The amount of underlying to convert to shares.
-     * @return The shares of vault token.
+     * @return shares The shares of vault token.
      */
     function amountToShares(
         address _vault,
         uint256 _amount,
         bool _useCeiling
-    ) internal view returns (uint256) {
+    ) internal view returns (uint256 shares) {
         uint256 totalSupply = IYearnVaultV2(_vault).totalSupply();
         if (totalSupply > 0) {
             if (_useCeiling) {
-                return
-                    Math.ceilDiv(
-                        _amount * totalSupply,
-                        calculateFreeFunds(_vault)
-                    );
+                shares = Math.ceilDiv(
+                    _amount * totalSupply,
+                    calculateFreeFunds(_vault)
+                );
             } else {
-                return (_amount * totalSupply) / calculateFreeFunds(_vault);
+                shares = (_amount * totalSupply) / calculateFreeFunds(_vault);
             }
         }
     }
@@ -39,22 +38,22 @@ library ShareValueHelper {
      * @notice Helper function to convert shares to underlying amount with exact precision.
      * @param _vault The address of the vault token.
      * @param _shares The amount of shares to convert to underlying.
-     * @return The amount of underlying token.
+     * @return amount The amount of underlying token.
      */
     function sharesToAmount(
         address _vault,
         uint256 _shares,
         bool _useCeiling
-    ) internal view returns (uint256) {
+    ) internal view returns (uint256 amount) {
         uint256 totalSupply = IYearnVaultV2(_vault).totalSupply();
         if (totalSupply == 0) return _shares;
 
         uint256 freeFunds = calculateFreeFunds(_vault);
 
         if (_useCeiling) {
-            return Math.ceilDiv(_shares * freeFunds, totalSupply);
+            amount = Math.ceilDiv(_shares * freeFunds, totalSupply);
         } else {
-            return ((_shares * freeFunds) / totalSupply);
+            amount = ((_shares * freeFunds) / totalSupply);
         }
     }
 
