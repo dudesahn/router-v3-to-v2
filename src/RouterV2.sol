@@ -119,7 +119,7 @@ contract RouterV2 is BaseStrategy {
     /// @notice Set the maximum loss we will accept (due to slippage or locked funds) on a vault withdrawal.
     /// @dev Generally, this should be zero, and this function will only be used in special/emergency cases.
     /// @param _maxLoss Max percentage loss we will take, in basis points (100% = 10_000).
-    function setMaxLoss(uint256 _maxLoss) external onlyManager {
+    function setMaxLoss(uint256 _maxLoss) external onlyManagement {
         maxLoss = _maxLoss;
     }
 }
