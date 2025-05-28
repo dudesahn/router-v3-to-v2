@@ -5,9 +5,6 @@ import {BaseStrategy, ERC20} from "@tokenized-strategy/BaseStrategy.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ShareValueHelper, IYearnVaultV2} from "src/ShareValueHelper.sol";
 
-// FOR THIS STRATEGY: PULL IN LEARNING'S FROM V2 => V2 ROUTER, SCHLAG'S ROUTER, AND MY CRVUSD ROUTER (FOR SURE TESTING)
-// also build new V2 => V3 and V2 => V2 routers while I'm doing this probably
-
 contract RouterV2 is BaseStrategy {
     using SafeERC20 for ERC20;
 
