@@ -9,7 +9,7 @@ contract RouterV2 is BaseHealthCheck {
     using SafeERC20 for ERC20;
 
     /// @notice The V2 yVault we are routing this strategy to.
-    IYearnVaultV2 public immutable v2Vault;
+    IYearnVaultV2 public immutable V2_VAULT;
 
     // no reason to deposit less than this, and helps us avoid any weird reverts from depositing 1 wei
     uint256 internal constant DUST = 1e6;
@@ -25,8 +25,8 @@ contract RouterV2 is BaseHealthCheck {
         string memory _name,
         address _v2Vault
     ) BaseHealthCheck(_asset, _name) {
-        v2Vault = IYearnVaultV2(_v2Vault);
-        require(v2Vault.token() == _asset, "wrong asset");
+        V2_VAULT = IYearnVaultV2(_v2Vault);
+        require(V2_VAULT.token() == _asset, "wrong asset");
 
         asset.forceApprove(_v2Vault, type(uint256).max);
     }
@@ -44,7 +44,7 @@ contract RouterV2 is BaseHealthCheck {
      * @notice Return the current balance of the strategies vault shares.
      */
     function balanceOfVault() public view returns (uint256) {
-        return v2Vault.balanceOf(address(this));
+        return V2_VAULT.balanceOf(address(this));
     }
 
     /**
@@ -54,7 +54,7 @@ contract RouterV2 is BaseHealthCheck {
     function valueOfVault() public view returns (uint256) {
         return
             ShareValueHelper.sharesToAmount(
-                address(v2Vault),
+                address(V2_VAULT),
                 balanceOfVault(),
                 false
             );
@@ -64,7 +64,7 @@ contract RouterV2 is BaseHealthCheck {
 
     function _deployFunds(uint256 _amount) internal override {
         if (_amount > DUST) {
-            v2Vault.deposit(_amount);
+            V2_VAULT.deposit(_amount);
         }
     }
 
@@ -78,7 +78,7 @@ contract RouterV2 is BaseHealthCheck {
         } else {
             // use share value helper for improved precision and round up
             shares = ShareValueHelper.amountToShares(
-                address(v2Vault),
+                address(V2_VAULT),
                 _amount,
                 true
             );
@@ -88,7 +88,7 @@ contract RouterV2 is BaseHealthCheck {
 
         // trying to withdraw 0 reverts
         if (shares > 0) {
-            v2Vault.withdraw(shares, address(this), maxLoss);
+            V2_VAULT.withdraw(shares, address(this), maxLoss);
         }
     }
 
@@ -105,8 +105,8 @@ contract RouterV2 is BaseHealthCheck {
     ) public view override returns (uint256 depositLimit) {
         // If the depositor is whitelisted, allow deposits.
         if (allowed[_depositor]) {
-            uint256 limit = v2Vault.depositLimit();
-            uint256 assets = v2Vault.totalAssets();
+            uint256 limit = V2_VAULT.depositLimit();
+            uint256 assets = V2_VAULT.totalAssets();
 
             if (limit > assets) {
                 unchecked {

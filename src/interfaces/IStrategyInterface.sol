@@ -4,7 +4,7 @@ pragma solidity ^0.8.18;
 import {IBaseHealthCheck} from "@periphery/Bases/HealthCheck/IBaseHealthCheck.sol";
 
 interface IStrategyInterface is IBaseHealthCheck {
-    function v2Vault() external view returns (address);
+    function V2_VAULT() external view returns (address);
 
     function balanceOfAsset() external view returns (uint256);
 
