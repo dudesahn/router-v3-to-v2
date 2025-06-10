@@ -74,6 +74,17 @@ contract Setup is ExtendedTest, IEvents {
         // Deploy strategy and set variables
         strategy = IStrategyInterface(setUpStrategy());
 
+        // whitelist user for deposit
+        airdrop(asset, user, minFuzzAmount);
+        vm.prank(user);
+        asset.approve(address(strategy), minFuzzAmount);
+        vm.prank(user);
+        vm.expectRevert("ERC4626: deposit more than max");
+        strategy.deposit(minFuzzAmount, user);
+
+        vm.prank(management);
+        strategy.setAllowed(user, true);
+
         factory = strategy.FACTORY();
 
         // label all the used addresses for traces
