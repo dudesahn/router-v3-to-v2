@@ -14,6 +14,7 @@ library ShareValueHelper {
      * @notice Helper function to convert underlying amount to vault shares with exact precision.
      * @param _vault The address of the vault token.
      * @param _amount The amount of underlying to convert to shares.
+     * @param _useCeiling Whether to round up or not.
      * @return shares The shares of vault token.
      */
     function amountToShares(
@@ -38,6 +39,7 @@ library ShareValueHelper {
      * @notice Helper function to convert shares to underlying amount with exact precision.
      * @param _vault The address of the vault token.
      * @param _shares The amount of shares to convert to underlying.
+     * @param _useCeiling Whether to round up or not.
      * @return amount The amount of underlying token.
      */
     function sharesToAmount(
