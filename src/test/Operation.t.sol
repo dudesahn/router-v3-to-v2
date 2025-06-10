@@ -28,7 +28,7 @@ contract OperationTest is Setup {
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
 
         // simulate profits in our target vault. it's a big vault so we're safe to use 10k
-        createProfitInTargetVault(strategy.v2Vault(), 10_000e18);
+        createProfitInTargetVault(strategy.V2_VAULT(), 10_000e18);
 
         // Report profit
         vm.prank(keeper);
@@ -97,7 +97,7 @@ contract OperationTest is Setup {
         assertLe(loss, 1, "!loss");
 
         // simulate profits in our target vault as well this time for 0.1% profit
-        createProfitInTargetVault(strategy.v2Vault(), _amount / 1000);
+        createProfitInTargetVault(strategy.V2_VAULT(), _amount / 1000);
 
         // Report profit
         vm.prank(keeper);
