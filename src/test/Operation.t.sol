@@ -28,7 +28,7 @@ contract OperationTest is Setup {
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
 
         // simulate profits in our target vault. it's a big vault so we're safe to use 10k
-        createProfitInTargetVault(strategy.v2Vault(), 10_000e18);
+        createProfitInTargetVault(strategy.V2_VAULT(), 10_000e18);
 
         // Report profit
         vm.prank(keeper);
@@ -82,6 +82,10 @@ contract OperationTest is Setup {
 
         assertEq(strategy.totalAssets(), _amount, "!totalAssets");
 
+        // turn off health check, we accept a 1 wei loss in our first harvest
+        vm.prank(management);
+        strategy.setDoHealthCheck(false);
+
         // Report profit
         vm.prank(keeper);
         (uint256 profit, uint256 loss) = strategy.report();
@@ -93,7 +97,7 @@ contract OperationTest is Setup {
         assertLe(loss, 1, "!loss");
 
         // simulate profits in our target vault as well this time for 0.1% profit
-        createProfitInTargetVault(strategy.v2Vault(), _amount / 1000);
+        createProfitInTargetVault(strategy.V2_VAULT(), _amount / 1000);
 
         // Report profit
         vm.prank(keeper);
@@ -130,7 +134,8 @@ contract OperationTest is Setup {
         uint16 _profitFactor
     ) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
-        _profitFactor = uint16(bound(uint256(_profitFactor), 10, MAX_BPS));
+        // go up to 9900 since there's some profit naturally and we don't want to do over 100% to fail health check
+        _profitFactor = uint16(bound(uint256(_profitFactor), 10, 9900));
 
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);
@@ -178,7 +183,8 @@ contract OperationTest is Setup {
         uint16 _profitFactor
     ) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
-        _profitFactor = uint16(bound(uint256(_profitFactor), 10, MAX_BPS));
+        // go up to 9900 since there's some profit naturally and we don't want to do over 100% to fail health check
+        _profitFactor = uint16(bound(uint256(_profitFactor), 10, 9900));
 
         // Set protocol fee to 0 and perf fee to 10%
         setFees(0, 1_000);
