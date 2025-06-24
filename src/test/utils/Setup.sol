@@ -2,10 +2,10 @@
 pragma solidity ^0.8.18;
 
 import "forge-std/console2.sol";
-import {ExtendedTest} from "./ExtendedTest.sol";
+import {Test} from "forge-std/Test.sol";
 
 import {RouterV2, ERC20, IYearnVaultV2} from "src/RouterV2.sol";
-import {StrategyFactory} from "src/StrategyFactory.sol";
+import {RouterFactory} from "src/RouterFactory.sol";
 import {IStrategyInterface} from "src/interfaces/IStrategyInterface.sol";
 
 // Inherit the events so they can be checked if desired.
@@ -19,12 +19,12 @@ interface IFactory {
     function set_protocol_fee_recipient(address) external;
 }
 
-contract Setup is ExtendedTest, IEvents {
+contract Setup is Test, IEvents {
     // Contract instances that we will use repeatedly.
     ERC20 public asset;
     IStrategyInterface public strategy;
 
-    StrategyFactory public strategyFactory;
+    RouterFactory public strategyFactory;
 
     mapping(string => address) public tokenAddrs;
 
@@ -64,7 +64,7 @@ contract Setup is ExtendedTest, IEvents {
         // set our V2 vault address here
         V2Vault = 0xf165a634296800812B8B0607a75DeDdcD4D3cC88;
 
-        strategyFactory = new StrategyFactory(
+        strategyFactory = new RouterFactory(
             management,
             performanceFeeRecipient,
             keeper,
@@ -98,18 +98,30 @@ contract Setup is ExtendedTest, IEvents {
 
     function setUpStrategy() public returns (address) {
         // we save the strategy as a IStrategyInterface to give it the needed interface
+        vm.startPrank(management);
         IStrategyInterface _strategy = IStrategyInterface(
             address(
-                strategyFactory.newStrategy(
-                    address(asset),
+                strategyFactory.newRouterStrategy(
                     "V2 Router Strategy",
+                    address(asset),
                     V2Vault
                 )
             )
         );
 
-        vm.prank(management);
+        vm.expectRevert("wrong asset");
+        IStrategyInterface _strategyTwo = IStrategyInterface(
+            address(
+                strategyFactory.newRouterStrategy(
+                    "V2 Router Strategy",
+                    tokenAddrs["WBTC"],
+                    V2Vault
+                )
+            )
+        );
+
         _strategy.acceptManagement();
+        vm.stopPrank();
 
         return address(_strategy);
     }
@@ -226,4 +238,6 @@ contract Setup is ExtendedTest, IEvents {
         tokenAddrs["DAI"] = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
         tokenAddrs["USDC"] = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     }
+
+    function test_setup_dummy() public {}
 }
