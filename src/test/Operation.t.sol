@@ -2,7 +2,7 @@
 pragma solidity ^0.8.18;
 
 import "forge-std/console2.sol";
-import {Setup, ERC20, IStrategyInterface} from "./utils/Setup.sol";
+import {Setup, ERC20, IStrategyInterface} from "src/test/utils/Setup.sol";
 
 contract OperationTest is Setup {
     function setUp() public virtual override {
@@ -86,6 +86,9 @@ contract OperationTest is Setup {
         vm.prank(management);
         strategy.setDoHealthCheck(false);
 
+        // assert that our claimable profits is == 0
+        assertEq(strategy.claimableProfits(), 0, "!profits");
+
         // Report profit
         vm.prank(keeper);
         (uint256 profit, uint256 loss) = strategy.report();
@@ -98,6 +101,9 @@ contract OperationTest is Setup {
 
         // simulate profits in our target vault as well this time for 0.1% profit
         createProfitInTargetVault(strategy.V2_VAULT(), _amount / 1000);
+
+        // assert that our claimable profits is > 0
+        assertGt(strategy.claimableProfits(), 0, "!profits");
 
         // Report profit
         vm.prank(keeper);
@@ -127,6 +133,13 @@ contract OperationTest is Setup {
             balanceBefore + _amount,
             "!final balance"
         );
+
+        // set our max loss
+        vm.startPrank(management);
+        vm.expectRevert(bytes("!bps"));
+        strategy.setMaxLoss(10_001);
+        strategy.setMaxLoss(100);
+        vm.stopPrank();
     }
 
     function test_profitableReport(
@@ -247,8 +260,15 @@ contract OperationTest is Setup {
     function test_tendTrigger(uint256 _amount) public {
         vm.assume(_amount > minFuzzAmount && _amount < maxFuzzAmount);
 
+        // make sure there's not any currently unlocking profit in the V2 vault
+        skip(strategy.profitMaxUnlockTime());
+
         (bool trigger, ) = strategy.tendTrigger();
         assertTrue(!trigger);
+
+        // turn off health check, we accept a 1 wei loss in our first harvest
+        vm.prank(management);
+        strategy.setDoHealthCheck(false);
 
         // Deposit into strategy
         mintAndDepositIntoStrategy(strategy, user, _amount);
@@ -263,7 +283,12 @@ contract OperationTest is Setup {
         assertTrue(!trigger);
 
         vm.prank(keeper);
-        strategy.report();
+        (uint256 profit, uint256 loss) = strategy.report();
+
+        // Check return Values
+        assertEq(profit, 0, "!profit");
+        // we accept loss of up to 2 wei here because of rounding since there hasn't been profit yet
+        assertLe(loss, 2, "!loss");
 
         (trigger, ) = strategy.tendTrigger();
         assertTrue(!trigger);

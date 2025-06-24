@@ -12,5 +12,9 @@ interface IStrategyInterface is IBaseHealthCheck {
 
     function valueOfVault() external view returns (uint256);
 
+    function claimableProfits() external view returns (uint256);
+
     function setAllowed(address _address, bool _allowed) external;
+
+    function setMaxLoss(uint256 _maxLoss) external;
 }

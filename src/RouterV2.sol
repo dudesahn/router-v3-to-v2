@@ -60,6 +60,20 @@ contract RouterV2 is BaseHealthCheck {
             );
     }
 
+    /// @notice Balance of asset we will gain on our next report
+    function claimableProfits() external view returns (uint256 profits) {
+        uint256 assets = balanceOfAsset() + valueOfVault();
+        uint256 debt = TokenizedStrategy.totalAssets();
+
+        if (assets > debt) {
+            unchecked {
+                profits = assets - debt;
+            }
+        } else {
+            profits = 0;
+        }
+    }
+
     /* ========== CORE STRATEGY FUNCTIONS ========== */
 
     function _deployFunds(uint256 _amount) internal override {
