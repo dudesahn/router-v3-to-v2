@@ -63,6 +63,7 @@ library ShareValueHelper {
         address _vault
     ) internal view returns (uint256) {
         uint256 totalAssets = IYearnVaultV2(_vault).totalAssets();
+        //slither-disable-next-line timestamp
         uint256 lockedFundsRatio = (block.timestamp -
             IYearnVaultV2(_vault).lastReport()) *
             IYearnVaultV2(_vault).lockedProfitDegradation();
