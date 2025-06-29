@@ -28,8 +28,15 @@ contract RouterFactory {
         address _keeper,
         address _emergencyAdmin
     ) {
+        require(
+            _performanceFeeRecipient != address(0) &&
+                _management != address(0) &&
+                _emergencyAdmin != address(0),
+            "ZERO_ADDRESS"
+        );
         management = _management;
         performanceFeeRecipient = _performanceFeeRecipient;
+        //slither-disable-next-line missing-zero-check
         keeper = _keeper;
         emergencyAdmin = _emergencyAdmin;
     }
@@ -46,7 +53,8 @@ contract RouterFactory {
         string calldata _name,
         address _asset,
         address _v2Vault
-    ) external virtual returns (address strategy) {
+    ) external returns (address strategy) {
+        // slither-disable-start reentrancy-no-eth,reentrancy-events
         require(msg.sender == management, "!authorized");
 
         // make sure we don't already have a strategy deployed for this V2 vault
@@ -69,6 +77,7 @@ contract RouterFactory {
 
         deployments[_asset] = address(_newStrategy);
         strategy = address(_newStrategy);
+        // slither-disable-end reentrancy-no-eth,reentrancy-events
     }
 
     /**
@@ -108,6 +117,7 @@ contract RouterFactory {
         );
         management = _management;
         performanceFeeRecipient = _performanceFeeRecipient;
+        //slither-disable-next-line missing-zero-check
         keeper = _keeper;
         emergencyAdmin = _emergencyAdmin;
     }
