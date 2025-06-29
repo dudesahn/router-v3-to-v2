@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.18;
+pragma solidity 0.8.28;
 
 import {RouterV2, ERC20} from "src/RouterV2.sol";
 import {IStrategyInterface} from "src/interfaces/IStrategyInterface.sol";
